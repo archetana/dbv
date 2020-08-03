@@ -1,4 +1,7 @@
-<h2><?php echo __('Revisions'); ?></h2>
+<div id="topbar">
+<h2 style="float: left;"><?php echo __('Revisions'); ?></h2>
+<button data-role="add-revision-handle" type="button" class="btn btn-mini btn-info pull-right" style="margin-top: -1px;"><?php echo __('Add Revision') ?></button>
+</div>
 <?php if (isset($this->revisions) && count($this->revisions)) { ?>
 	<form method="post" action="" class="nomargin" id="revisions">
 		<div class="log"></div>
@@ -59,7 +62,7 @@
 	</form>
 <?php } else { ?>
 	<div class="alert alert-info nomargin">
-		<?php echo __('No revisions in #{path}', array('path' => '<strong>' . DBV_REVISIONS_PATH . '</strong>')) ?>
+		<?php echo __('No revisions in #{path}', array('path' => '<strong>' . REVISIONS_PATH . '</strong>')) ?>
 	</div>
 <?php } ?>
 <script type="text/javascript">
@@ -98,7 +101,23 @@
 				}
 			}
 		});
+		$$('button[data-role="add-revision-handle"]').invoke('observe', 'click', function (event) {
+			var self = this;
+			this.disable();
+			new Ajax.Request('index.php?a=createRevisionFolderInit', {
+				onSuccess: function (transport) {
+					self.enable();
 
+					var response = transport.responseText.evalJSON();
+
+					if (response.error) {
+						return render_messages('error', container, response.error);
+					}
+
+					render_messages('success', container, response.message);
+				}
+			});
+		});
 		$$('button[data-role="editor-save"]').invoke('observe', 'click', function (event) {
 			var self = this;
 
@@ -154,7 +173,7 @@
                     var response = transport.responseText.evalJSON();
 
                     if (typeof response.error != 'undefined') {
-                        return APP.growler.error('<?php echo __('Error!'); ?>', response.error);
+                        return APP.growler.error('<?php echo _('Error!'); ?>', response.error);
                     }
 
                     if (response.messages.error) {

@@ -47,19 +47,15 @@ class DBV
         } else {
             if (function_exists('apache_request_headers')) {
                 $headers = apache_request_headers();
-                $authorization = array_key_exists('HTTP_AUTHORIZATION', $headers)
-                    ? $headers['HTTP_AUTHORIZATION']
-                    : (array_key_exists('Authorization', $headers)?$headers['Authorization']:'');
+                $authorization = $headers['HTTP_AUTHORIZATION'];
             }
         }
 
-        if ($authorization) {
-            list($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']) = explode(':', base64_decode(substr($authorization, 6)));
-        }
+        list($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']) = explode(':', base64_decode(substr($authorization, 6)));
         if (strlen(DBV_USERNAME) && strlen(DBV_PASSWORD) && (!isset($_SERVER['PHP_AUTH_USER']) || !($_SERVER['PHP_AUTH_USER'] == DBV_USERNAME && $_SERVER['PHP_AUTH_PW'] == DBV_PASSWORD))) {
             header('WWW-Authenticate: Basic realm="DBV interface"');
             header('HTTP/1.0 401 Unauthorized');
-            echo __('Access denied');
+            echo _('Access denied');
             exit();
         }
     }
@@ -140,7 +136,7 @@ class DBV
 
     public function revisionsAction()
     {
-        $revisions = isset($_POST['revisions']) ? array_filter($_POST['revisions'], 'is_numeric') : array();
+        $revisions = isset($_POST['revisions']) ? array_map("intval", $_POST['revisions']) : array();
         $current_revision = $this->_getCurrentRevision();
 
         if (count($revisions)) {
@@ -180,7 +176,41 @@ class DBV
         }
     }
 
+    public function createRevisionFolderInitAction()
+    {
+		
+        $path = DBV_REVISIONS_PATH;
+		
+		$scan = scandir($path);
+		$latest_dir = 0;
+		foreach($scan as $file)
+		{
+				$accumulate = $accumulate . " " . $file;
+				if ((int)$file > $latest_dir) {
+					$latest_dir = (int)$file;
 
+				}
+		}
+       
+		$latest_dir++;
+		
+	    $path = DBV_REVISIONS_PATH . DS .  (string)$latest_dir;
+		
+		if (!@mkdir($path,  '0777')) {
+			$this->_json(array(
+					'error' => __("Couldn't create folder: #{path}<br />Make sure the user running DBV has adequate permissions.", array('path' => "<strong>$accumulate</strong>"))
+				));
+        }
+		
+		$path = DBV_REVISIONS_PATH . DS . $latest_dir . DS . "revisions.sql";
+		if(!fopen($path, "w")) {
+			$this->_json(array(
+					'error' => __("Couldn't create file: #{path}<br />Make sure the user running DBV has adequate permissions.", array('path' => "<strong>$path</strong>"))
+				));
+		}
+        $this->_json(array('ok' => true, 'message' => __("Dir #{path} successfully created!", array('path' => "<strong>$path</strong>"))));
+    }
+	
     public function saveRevisionFileAction()
     {
         $revision = intval($_POST['revision']);
@@ -336,40 +366,18 @@ class DBV
 
     protected function _getCurrentRevision()
     {
-        switch (DBV_REVISION_STORAGE) {
-            case 'FILE':
-                $file = DBV_META_PATH . DS . 'revision';
-                if (file_exists($file)) {
-                    return intval(file_get_contents($file));
-                }
-                return 0;
-                break;
-            case 'ADAPTER':
-                return $this->_getAdapter()->getCurrentRevision();
-                break;
-            default:
-                $this->error("Incorrect revision storage specified");
-                break;
+        $file = DBV_META_PATH . DS . 'revision';
+        if (file_exists($file)) {
+            return intval(file_get_contents($file));
         }
+        return 0;
     }
 
     protected function _setCurrentRevision($revision)
     {
-        switch (DBV_REVISION_STORAGE) {
-            case 'FILE':
-                $file = DBV_META_PATH . DS . 'revision';
-                if (!@file_put_contents($file, $revision)) {
-                    $this->error("Cannot write revision file");
-                }
-                break;
-            case 'ADAPTER':
-                if (!$this->_getAdapter()->setCurrentRevision($revision)){
-                    $this->error("Cannot save revision to DB");
-                }
-                break;
-            default:
-                $this->error("Incorrect revision storage specified");
-                break;
+        $file = DBV_META_PATH . DS . 'revision';
+        if (!@file_put_contents($file, $revision)) {
+            $this->error("Cannot write revision file");
         }
     }
 
@@ -429,7 +437,7 @@ class DBV
 
     protected function _json($data = array())
     {
-        header("Content-type: application/json");
+        header("Content-type: text/x-json");
         echo (is_string($data) ? $data : json_encode($data));
         exit();
     }
